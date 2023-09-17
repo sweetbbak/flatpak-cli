@@ -4,12 +4,15 @@ import (
 	"bufio"
 	"encoding/xml"
 	"fmt"
-	fzf "github.com/ktr0731/go-fuzzyfinder"
 	"io"
+	// "io/ioutil"
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+
+	fzf "github.com/ktr0731/go-fuzzyfinder"
 )
 
 type Comp struct {
@@ -62,7 +65,7 @@ func install(pkg string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		fmt.Sprintf("could not install %s: \n%s\n", pkg, err)
+		fmt.Printf("could not install %s: \n%s\n", pkg, err)
 	}
 }
 
@@ -125,9 +128,105 @@ func parse_xml() {
 	fmt.Println(choice)
 }
 
+func trimQuotes(s string) string {
+	if len(s) >= 2 {
+		if c := s[len(s)-1]; s[0] == c && (c == '"' || c == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+func create_shims() {
+	path := os.Getenv("PATH")
+	fmt.Println(path)
+
+	cmd := exec.Command("flatpak", "list", "--app", "--columns=name")
+	output, err := cmd.Output()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		os.Exit(0)
+	}
+
+	x := []string{}
+
+	lines := strings.Split(string(output), "\n")
+	for _, line := range lines {
+		if line != "" {
+			x = append(x, line)
+			fmt.Println(line)
+		}
+	}
+
+	fmt.Println(x)
+
+	cmd2 := exec.Command("flatpak", "list", "--app", "--columns=app")
+	output2, err := cmd2.Output()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		os.Exit(0)
+	}
+
+	y := []string{}
+
+	lines2 := strings.Split(string(output2), "\n")
+	for _, line := range lines2 {
+		if line != "" {
+			y = append(y, line)
+			fmt.Println(line)
+		}
+	}
+
+	fmt.Println(y)
+
+	// os.Mkdir("bin", 777)
+	os.MkdirAll("bin", 0755)
+	// os.Chown("bin", 1000, 1000)
+
+	for i := 0; i < len(x); i++ {
+		fmt.Println(x[i])
+		fmt.Println(y[i])
+
+		workdir, _ := os.Getwd()
+
+		exe := strings.ToLower(x[i])
+		exe = strings.ReplaceAll(exe, " ", "_")
+		exe = trimQuotes(exe)
+
+		path := filepath.Join(workdir, "bin", exe)
+
+		file, err := os.Create(path)
+		if err != nil {
+			fmt.Println("Error: ", err)
+		}
+
+		fmt.Println("File created successfully: ", file)
+		defer file.Close()
+
+		script := []string{"!#/bin/bash", y[i]}
+		data_string := strings.Join(script, "\n")
+		data := []byte(data_string)
+
+		err = os.WriteFile(path, data, 0755)
+		os.Chmod(path, 0755)
+
+	}
+}
+
 func main() {
-	home := os.Getenv("HOME")
-	fmt.Println(home)
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--link" {
+			create_shims()
+			os.Exit(0)
+		} else if os.Args[1] == "--help" || os.Args[1] == "-h" {
+			fmt.Println("go-flatpak")
+			fmt.Println("\nRun go-flatpak with no arguments to install a package using a fzf")
+			fmt.Println("--help|-h\t\tshow this help message")
+			fmt.Println("--link\t\t\tcreate a bin directory and export shorthand executable files")
+			fmt.Println("\nex: org.blender.Blender - creates an executable file called \"blender\"")
+			os.Exit(0)
+		}
+	}
 
 	xml_file, err := os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
 
@@ -142,17 +241,7 @@ func main() {
 	// read our opened xmlFile as a byte array.
 	byteValue, _ := io.ReadAll(xml_file)
 
-	// fmt.Println(xml.Unmarshal(byteValue, &component))
 	xml.Unmarshal(byteValue, &component)
-
-	// fuzzy(&component)
-
-	// for i := 0; i < len(component.App); i++ {
-	// 	fmt.Println("Name: " + component.App[i].Name)
-	// 	fmt.Println("ID: " + component.App[i].ID)
-	// 	fmt.Println("Summary: " + component.App[i].Summary)
-	// 	fmt.Println("")
-	// }
 
 	idx, err := fzf.FindMulti(
 		component.App,
@@ -172,9 +261,8 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	// fmt.Printf("selected: %v\n", idx)
-	// fmt.Printf("flatpak install %s\n", component.App[idx[0]].ID)
-	fmt.Println(idx)
+
+	// fmt.Println(idx)
 	choice := component.App[idx[0]].ID
 	fmt.Println(choice)
 
