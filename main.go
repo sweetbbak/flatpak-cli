@@ -5,7 +5,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
-	// "io/ioutil"
 	"log"
 	"os"
 	"os/exec"
@@ -73,6 +72,39 @@ func install(pkg string) {
 		fmt.Printf("could not install %s: \n%s\n", pkg, err)
 	}
 }
+
+// Multi package install -----------------------
+func arrayToString(arr []string) string {
+	return strings.Join([]string(arr), "\n")
+}
+
+func install_it(pkgz []string) {
+	fmt.Println("Installing: ", pkgz)
+
+	for i := 0; i < len(pkgz); i++ {
+		// fmt.Println(pkgz[i])
+		if strings.Contains(pkgz[i], ".desktop") {
+			pkgz[i] = strings.ReplaceAll(pkgz[i], ".desktop", "")
+		}
+	}
+
+	pkg := arrayToString(pkgz)
+	if pkg == "" {
+		fmt.Println("Error converting package array to string/list")
+		os.Exit(1)
+	}
+	cmd := exec.Command("flatpak", "install", "-y", "--noninteractive", pkg)
+
+	cmd.Stdin = os.Stdout
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("could not install %s: \n%s\n", pkgz, err)
+	}
+}
+
+// Multi package install -----------------------
 
 func askForConfirmation(s string) bool {
 	reader := bufio.NewReader(os.Stdin)
@@ -187,9 +219,7 @@ func create_shims() {
 
 	fmt.Println(y)
 
-	// os.Mkdir("bin", 777)
 	os.MkdirAll("bin", 0755)
-	// os.Chown("bin", 1000, 1000)
 
 	for i := 0; i < len(x); i++ {
 		fmt.Println(x[i])
@@ -237,18 +267,15 @@ func main() {
 	}
 
 	xml_file, err := os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
-
 	if err != nil {
 		fmt.Println(err)
 	}
 
 	defer xml_file.Close()
-
 	var component Comp
 
 	// read our opened xmlFile as a byte array.
 	byteValue, _ := io.ReadAll(xml_file)
-
 	xml.Unmarshal(byteValue, &component)
 
 	idx, err := fzf.FindMulti(
@@ -270,13 +297,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	choice := component.App[idx[0]].ID
-	fmt.Println(choice)
+	package_list_from_index := []string{}
+	for i := 0; i < len(idx); i++ {
+		package_list_from_index = append(package_list_from_index, component.App[idx[i]].ID)
+	}
 
-	c := askForConfirmation("Would you like to install: " + choice)
+	fmt.Println(arrayToString(package_list_from_index))
+	c := askForConfirmation("Would you like to install: ")
 	if c {
 		fmt.Println("OKAY :)")
-		install(choice)
+		// install(choice)
+		// package_list_from_index := []string{}
+		// for i := 0; i < len(idx); i++ {
+		// 	package_list_from_index = append(package_list_from_index, x[idx[i]])
+		// }
+		install_it(package_list_from_index)
+
 	} else {
 		fmt.Println("OKAY Maybe next time :)")
 		os.Exit(0)
