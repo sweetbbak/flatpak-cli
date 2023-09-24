@@ -54,11 +54,16 @@ func fuzzy(component *Comp) {
 }
 
 func install(pkg string) {
+
+	if strings.Contains(pkg, ".desktop") {
+		pkg = strings.ReplaceAll(pkg, ".desktop", "")
+	}
+
 	fmt.Println("Installing: ", pkg)
 
 	// r, w := io.Pipe()
-	cmd := exec.Command("flatpak", "install", "-y", "--noninteractive", pkg)
 	// cmd.Stdin = r
+	cmd := exec.Command("flatpak", "install", "-y", "--noninteractive", pkg)
 
 	cmd.Stdin = os.Stdout
 	cmd.Stdout = os.Stdout
@@ -79,10 +84,13 @@ func askForConfirmation(s string) bool {
 		if err != nil {
 			log.Fatal(err)
 		}
+		if response == "" {
+			return true
+		}
 
 		response = strings.ToLower(strings.TrimSpace(response))
 
-		if response == "y" || response == "yes" || response == "\n" {
+		if response == "y" || response == "yes" || response == "\n" || response == "" {
 			return true
 		} else if response == "n" || response == "no" {
 			return false
@@ -262,7 +270,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// fmt.Println(idx)
 	choice := component.App[idx[0]].ID
 	fmt.Println(choice)
 
