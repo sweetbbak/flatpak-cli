@@ -10,8 +10,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	// "unsafe"
 
+	// "unsafe"
 	fzf "github.com/ktr0731/go-fuzzyfinder"
 )
 
@@ -60,9 +60,6 @@ func install(pkg string) {
 	}
 
 	fmt.Println("Installing: ", pkg)
-
-	// r, w := io.Pipe()
-	// cmd.Stdin = r
 	cmd := exec.Command("flatpak", "install", "-y", "--noninteractive", pkg)
 
 	cmd.Stdin = os.Stdout
@@ -83,23 +80,13 @@ func install_it(pkgz []string) {
 	fmt.Println("Installing: ", pkgz)
 
 	for i := 0; i < len(pkgz); i++ {
-		// fmt.Println(pkgz[i])
 		if strings.Contains(pkgz[i], ".desktop") {
 			pkgz[i] = strings.ReplaceAll(pkgz[i], ".desktop", "")
 		}
 	}
 
-	// pkg := strings.Join([]string(pkgz), " ")
-	// cmdstr := strings.Join([]string{"install", "-y", "--noninteractive", pkg}, " ")
-	// cmd := exec.Command("flatpak", "install", pkgz...)
 	args := append([]string{"install", "-y"}, pkgz...)
-	// cmdd := exec.Cmd{
-	// 	"flatpak",
-	// 	args,
-	// }
-	// cmd := exec.Cmd("flatpak", "install", pkgz...)
 	cmd := exec.Command("flatpak", args...)
-	// cmd := exec.Cmd(cmdd)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -183,6 +170,7 @@ func trimQuotes(s string) string {
 }
 
 func create_shims() {
+	// list flatpak apps and ID's to auto-generate file executable shims
 	path := os.Getenv("PATH")
 	fmt.Println(path)
 
@@ -256,6 +244,17 @@ func create_shims() {
 	}
 }
 
+func find_xml() {
+	c := exec.Command("curl", "-Sl", "https://github.com/sweetbbak/go-flatpak")
+	b, e := c.Output()
+	if e != nil {
+		fmt.Println(e)
+	}
+	fmt.Println(string(b))
+	os.Create("appstream.xml")
+	os.WriteFile("appstream.xml", b, 0644)
+}
+
 func main() {
 	if len(os.Args) > 1 {
 		if os.Args[1] == "--link" {
@@ -273,7 +272,9 @@ func main() {
 
 	xml_file, err := os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("appstream.xml file not found")
+		find_xml()
+		os.Exit(0)
 	}
 
 	defer xml_file.Close()
@@ -290,7 +291,7 @@ func main() {
 		},
 		fzf.WithPreviewWindow(func(i, w, h int) string {
 			if i == -1 {
-				return ""
+				return "Hello there :)"
 			}
 			return fmt.Sprintf("Name: %s (%s)\nSummary: %s\n%s\n",
 				component.App[i].Name,
@@ -311,11 +312,6 @@ func main() {
 	c := askForConfirmation("Would you like to install: ")
 	if c {
 		fmt.Println("OKAY :)")
-		// install(choice)
-		// package_list_from_index := []string{}
-		// for i := 0; i < len(idx); i++ {
-		// 	package_list_from_index = append(package_list_from_index, x[idx[i]])
-		// }
 		install_it(package_list_from_index)
 
 	} else {
