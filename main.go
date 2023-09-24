@@ -259,7 +259,7 @@ func main() {
 				component.App[i].Summary)
 		}))
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 
 	// fmt.Println(idx)
