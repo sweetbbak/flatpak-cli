@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	// "unsafe"
 
 	fzf "github.com/ktr0731/go-fuzzyfinder"
 )
@@ -88,14 +89,18 @@ func install_it(pkgz []string) {
 		}
 	}
 
-	pkg := arrayToString(pkgz)
-	if pkg == "" {
-		fmt.Println("Error converting package array to string/list")
-		os.Exit(1)
-	}
-	cmd := exec.Command("flatpak", "install", "-y", "--noninteractive", pkg)
-
-	cmd.Stdin = os.Stdout
+	// pkg := strings.Join([]string(pkgz), " ")
+	// cmdstr := strings.Join([]string{"install", "-y", "--noninteractive", pkg}, " ")
+	// cmd := exec.Command("flatpak", "install", pkgz...)
+	args := append([]string{"install", "-y"}, pkgz...)
+	// cmdd := exec.Cmd{
+	// 	"flatpak",
+	// 	args,
+	// }
+	// cmd := exec.Cmd("flatpak", "install", pkgz...)
+	cmd := exec.Command("flatpak", args...)
+	// cmd := exec.Cmd(cmdd)
+	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
