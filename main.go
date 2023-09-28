@@ -2,18 +2,21 @@ package main
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
-	// "unsafe"
 	fzf "github.com/ktr0731/go-fuzzyfinder"
 )
+
+var url = "https://hub.flathub.org/flathub/appstream/x86_64/appstream.xml.gz"
 
 type Comp struct {
 	XMLName xml.Name `xml:"components"`
@@ -120,6 +123,34 @@ func askForConfirmation(s string) bool {
 			return false
 		}
 	}
+}
+
+func appstream_fallback() {
+	BASEURL := "https://flathub.org/repo/appstream"
+	ARCH := "x86_64"
+	url := strings.Join([]string{BASEURL, ARCH, "appstream.xml.gz"}, "/")
+	fmt.Println("Downloading Flatpak database: ", url)
+	out, err := os.Create("appstream.xml.gz")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer out.Close()
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer resp.Body.Close()
+	// ark, err := io.Copy(out, resp.Body)
+	// fmt.Println("Bytes written: ", ark)
+
+	appstream, err := os.Create("appstream.xml")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	r, err := gzip.NewReader(resp.Body)
+	io.Copy(appstream, r)
+	r.Close()
 }
 
 func parse_xml() {
@@ -244,18 +275,19 @@ func create_shims() {
 	}
 }
 
-func find_xml() {
-	c := exec.Command("curl", "-Sl", "https://github.com/sweetbbak/go-flatpak")
+func curl_xml() {
+	c := exec.Command("curl", "-Sl", "https://raw.githubusercontent.com/sweetbbak/flatpak-cli/main/appstream.xml")
 	b, e := c.Output()
 	if e != nil {
 		fmt.Println(e)
 	}
 	fmt.Println(string(b))
-	os.Create("appstream.xml")
-	os.WriteFile("appstream.xml", b, 0644)
+	os.WriteFile("xappstream.xml", b, 0644)
 }
 
 func main() {
+	appstream_fallback()
+	os.Exit(0)
 	if len(os.Args) > 1 {
 		if os.Args[1] == "--link" {
 			create_shims()
@@ -270,11 +302,12 @@ func main() {
 		}
 	}
 
-	xml_file, err := os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
-	if err != nil {
-		fmt.Println("appstream.xml file not found")
-		find_xml()
-		os.Exit(0)
+	var xml_file *os.File
+	if _, err := os.Stat("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml"); err == nil {
+		xml_file, err = os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
+	} else {
+		fmt.Println("Flatpak Database not found, downloading...")
+		appstream_fallback()
 	}
 
 	defer xml_file.Close()
