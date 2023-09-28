@@ -205,7 +205,8 @@ func create_shims() {
 
 	fmt.Println(y)
 
-	os.MkdirAll("bin", 0755)
+	flatpak_bin := "bin-fp"
+	os.MkdirAll(flatpak_bin, 0755)
 
 	for i := 0; i < len(x); i++ {
 		fmt.Println(x[i])
@@ -217,7 +218,7 @@ func create_shims() {
 		exe = strings.ReplaceAll(exe, " ", "_")
 		exe = trimQuotes(exe)
 
-		path := filepath.Join(workdir, "bin", exe)
+		path := filepath.Join(workdir, flatpak_bin, exe)
 
 		file, err := os.Create(path)
 		if err != nil {
@@ -233,7 +234,6 @@ func create_shims() {
 
 		err = os.WriteFile(path, data, 0755)
 		os.Chmod(path, 0755)
-
 	}
 }
 
@@ -244,12 +244,10 @@ func curl_xml() {
 		fmt.Println(e)
 	}
 	fmt.Println(string(b))
-	os.WriteFile("xappstream.xml", b, 0644)
+	os.WriteFile("appstream.xml", b, 0644)
 }
 
 func main() {
-	appstream_fallback()
-	os.Exit(0)
 	if len(os.Args) > 1 {
 		if os.Args[1] == "--link" {
 			create_shims()
