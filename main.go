@@ -153,44 +153,6 @@ func appstream_fallback() {
 	r.Close()
 }
 
-func parse_xml() {
-	xml_file, err := os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
-
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	defer xml_file.Close()
-
-	var component Comp
-
-	// read our opened xmlFile as a byte array.
-	byteValue, _ := io.ReadAll(xml_file)
-	xml.Unmarshal(byteValue, &component)
-
-	idx, err := fzf.FindMulti(
-		component.App,
-		func(i int) string {
-			return component.App[i].Name
-		},
-		fzf.WithPreviewWindow(func(i, w, h int) string {
-			if i == -1 {
-				return ""
-			}
-			return fmt.Sprintf("Name: %s (%s)\nSummary: %s\n%s\n",
-				component.App[i].Name,
-				component.App[i].ID,
-				component.App[i].Description,
-				component.App[i].Summary)
-		}))
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(idx)
-	choice := component.App[idx[0]].ID
-	fmt.Println(choice)
-}
-
 func trimQuotes(s string) string {
 	if len(s) >= 2 {
 		if c := s[len(s)-1]; s[0] == c && (c == '"' || c == '\'') {
