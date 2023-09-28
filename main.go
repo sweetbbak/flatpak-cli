@@ -292,8 +292,8 @@ func main() {
 				component.App[i].Description,
 				component.App[i].Summary)
 		}))
-	if err != nil {
-		log.Fatal(err)
+	if err == fzf.ErrAbort {
+		os.Exit(0)
 	}
 
 	package_list_from_index := []string{}
