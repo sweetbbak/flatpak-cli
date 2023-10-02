@@ -229,6 +229,14 @@ func create_shims() {
 		exe = strings.ReplaceAll(exe, "\\", "")
 		exe = trimQuotes(exe)
 
+		// remove flatpak bin from env first
+		// before looking for conflicting binary names
+		in_path, _ := exec.LookPath(exe)
+		if in_path != "" {
+			fmt.Println("Conflicting binary names")
+			fmt.Println(exe)
+		}
+
 		path := filepath.Join(workdir, flatpak_bin, exe)
 		file, err := os.Create(path)
 		if err != nil {
