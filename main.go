@@ -164,8 +164,8 @@ func trimQuotes(s string) string {
 
 func create_shims() {
 	// list flatpak apps and ID's to auto-generate file executable shims
-	path := os.Getenv("PATH")
-	fmt.Println(path)
+	// path := os.Getenv("PATH")
+	// fmt.Println(path)
 
 	cmd := exec.Command("flatpak", "list", "--app", "--columns=name")
 	output, err := cmd.Output()
@@ -180,11 +180,8 @@ func create_shims() {
 	for _, line := range lines {
 		if line != "" {
 			x = append(x, line)
-			fmt.Println(line)
 		}
 	}
-
-	fmt.Println(x)
 
 	cmd2 := exec.Command("flatpak", "list", "--app", "--columns=app")
 	output2, err := cmd2.Output()
@@ -199,33 +196,46 @@ func create_shims() {
 	for _, line := range lines2 {
 		if line != "" {
 			y = append(y, line)
-			fmt.Println(line)
+			// fmt.Println(line)
 		}
 	}
 
-	fmt.Println(y)
+	flatpak_bin := "flatpak-bin"
+	stats, err := os.Stat(flatpak_bin)
+	if err != nil {
+		fmt.Println("Directory exists")
+	}
 
-	flatpak_bin := "bin-fp"
-	os.MkdirAll(flatpak_bin, 0755)
+	if stats == nil {
+		os.MkdirAll(flatpak_bin, 0755)
 
+	} else {
+		fmt.Println("Directory already exists...")
+		fmt.Println("\x1b[33mThis will overwrite already existing flatpak executables and anything that shares the same name.\x1b[0m")
+		c := askForConfirmation("Overwrite? ")
+		if !c {
+			// maybe just rename?
+			fmt.Println("Please rename bin folder, or manually resolve this issue, then re-run.")
+			os.Exit(0)
+		}
+	}
+
+	workdir, _ := os.Getwd()
 	for i := 0; i < len(x); i++ {
-		fmt.Println(x[i])
-		fmt.Println(y[i])
-
-		workdir, _ := os.Getwd()
-
+		// switch to regex
 		exe := strings.ToLower(x[i])
 		exe = strings.ReplaceAll(exe, " ", "_")
+		exe = strings.ReplaceAll(exe, "'", "")
+		exe = strings.ReplaceAll(exe, "\\", "")
 		exe = trimQuotes(exe)
 
 		path := filepath.Join(workdir, flatpak_bin, exe)
-
 		file, err := os.Create(path)
 		if err != nil {
 			fmt.Println("Error: ", err)
 		}
 
-		fmt.Println("File created successfully: ", file)
+		fmt.Println("File created successfully: ", file.Name())
 		defer file.Close()
 
 		script := []string{"!#/bin/bash", y[i]}
