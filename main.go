@@ -265,7 +265,60 @@ func curl_xml() {
 	os.WriteFile("appstream.xml", b, 0644)
 }
 
+func merge(ms ...map[string]string) map[string][]string {
+	res := map[string][]string{}
+	for _, m := range ms {
+		for k, v := range m {
+			res[k] = append(res[k], v)
+		}
+	}
+	return res
+}
+
+func get_apps() {
+	cmd := exec.Command("flatpak", "search", "--columns", "name", "")
+	fmt.Println(cmd.Args)
+	output2, err := cmd.Output()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		// os.Exit(0)
+	}
+
+	y := []string{}
+
+	lines2 := strings.Split(string(output2), "\n")
+	for _, line := range lines2 {
+		if line != "" {
+			y = append(y, line)
+		}
+	}
+
+	cmd1 := exec.Command("flatpak", "search", "--columns", "application", "")
+	output1, err := cmd1.Output()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		// os.Exit(0)
+	}
+
+	x := []string{}
+	lines := strings.Split(string(output1), "\n")
+	for _, line := range lines {
+		if line != "" {
+			x = append(x, line)
+		}
+	}
+
+	ms := make(map[string]string)
+	for i := 0; i < len(x); i++ {
+		ms[y[i]] = x[i]
+	}
+	fmt.Println(ms)
+
+}
+
 func main() {
+	get_apps()
+	os.Exit(0)
 	if len(os.Args) > 1 {
 		if os.Args[1] == "--link" {
 			create_shims()
