@@ -2,7 +2,10 @@ module go-flatpak
 
 go 1.21.0
 
-require github.com/ktr0731/go-fuzzyfinder v0.7.0
+require (
+	github.com/jessevdk/go-flags v1.5.0
+	github.com/ktr0731/go-fuzzyfinder v0.7.0
+)
 
 require (
 	github.com/gdamore/encoding v1.0.0 // indirect

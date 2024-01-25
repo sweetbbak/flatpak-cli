@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -13,8 +14,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/jessevdk/go-flags"
 	fzf "github.com/ktr0731/go-fuzzyfinder"
 )
+
+var opts struct {
+	Download  bool   `short:"d" long:"download" description:"download App info file from flathub"`
+	Appstream string `short:"a" long:"appstream" description:"path to appstream.xml file [default: uses the one on the system]"`
+	Link      bool   `short:"l" long:"link" description:"export flatpaks into their CLI tool names by creating a shim"`
+	Verbose   bool   `short:"v" long:"verbose" description:"print debugging information and verbose output"`
+}
+
+var Debug = func(string, ...interface{}) {}
 
 var url = "https://hub.flathub.org/flathub/appstream/x86_64/appstream.xml.gz"
 
@@ -79,9 +90,10 @@ func arrayToString(arr []string) string {
 	return strings.Join([]string(arr), "\n")
 }
 
-func install_it(pkgz []string) {
+func install_it(pkgz []string) error {
 	fmt.Println("Installing: ", pkgz)
 
+	// idk why this happens but sometimes the names falsely have an extension
 	for i := 0; i < len(pkgz); i++ {
 		if strings.Contains(pkgz[i], ".desktop") {
 			pkgz[i] = strings.ReplaceAll(pkgz[i], ".desktop", "")
@@ -95,8 +107,9 @@ func install_it(pkgz []string) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		fmt.Printf("could not install %s: \n%s\n", pkgz, err)
+		return fmt.Errorf("could not install %s: \n%s\n", pkgz, err)
 	}
+	return nil
 }
 
 // Multi package install -----------------------
@@ -105,7 +118,7 @@ func askForConfirmation(s string) bool {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Printf("%s [y/n]: ", s)
+		fmt.Printf("%s [Y/n]: ", s)
 
 		response, err := reader.ReadString('\n')
 		if err != nil {
@@ -125,32 +138,32 @@ func askForConfirmation(s string) bool {
 	}
 }
 
-func appstream_fallback() {
+func appstream_fallback() error {
 	BASEURL := "https://flathub.org/repo/appstream"
 	ARCH := "x86_64"
 	url := strings.Join([]string{BASEURL, ARCH, "appstream.xml.gz"}, "/")
 	fmt.Println("Downloading Flatpak database: ", url)
 	out, err := os.Create("appstream.xml.gz")
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
+
 	defer out.Close()
 	resp, err := http.Get(url)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 	defer resp.Body.Close()
-	// ark, err := io.Copy(out, resp.Body)
-	// fmt.Println("Bytes written: ", ark)
 
 	appstream, err := os.Create("appstream.xml")
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	r, err := gzip.NewReader(resp.Body)
-	io.Copy(appstream, r)
-	r.Close()
+	defer r.Close()
+	_, err = io.Copy(appstream, r)
+	return err
 }
 
 func trimQuotes(s string) string {
@@ -162,16 +175,12 @@ func trimQuotes(s string) string {
 	return s
 }
 
-func create_shims() {
+func create_shims() error {
 	// list flatpak apps and ID's to auto-generate file executable shims
-	// path := os.Getenv("PATH")
-	// fmt.Println(path)
-
 	cmd := exec.Command("flatpak", "list", "--app", "--columns=name")
 	output, err := cmd.Output()
 	if err != nil {
-		fmt.Println("Error: ", err)
-		os.Exit(0)
+		return err
 	}
 
 	x := []string{}
@@ -186,8 +195,7 @@ func create_shims() {
 	cmd2 := exec.Command("flatpak", "list", "--app", "--columns=app")
 	output2, err := cmd2.Output()
 	if err != nil {
-		fmt.Println("Error: ", err)
-		os.Exit(0)
+		return err
 	}
 
 	y := []string{}
@@ -201,28 +209,27 @@ func create_shims() {
 	}
 
 	flatpak_bin := "flatpak-bin"
-	stats, err := os.Stat(flatpak_bin)
+	_, err = os.Stat(flatpak_bin)
 	if err != nil {
-		fmt.Println("Directory exists")
-	}
-
-	if stats == nil {
 		os.MkdirAll(flatpak_bin, 0755)
 
 	} else {
 		fmt.Println("Directory already exists...")
-		fmt.Println("\x1b[33mThis will overwrite already existing flatpak executables and anything that shares the same name.\x1b[0m")
+		fmt.Println("\x1b[33mThis will overwrite already existing exported flatpak shims.\x1b[0m")
 		c := askForConfirmation("Overwrite? ")
 		if !c {
-			// maybe just rename?
-			fmt.Println("Please rename bin folder, or manually resolve this issue, then re-run.")
-			os.Exit(0)
+			return fmt.Errorf("Please rename bin folder, or manually resolve this issue, then re-run.")
+		} else {
+			err := os.RemoveAll(flatpak_bin)
+			if err != nil {
+				return err
+			}
+			os.MkdirAll(flatpak_bin, 0755)
 		}
 	}
 
 	workdir, _ := os.Getwd()
 	for i := 0; i < len(x); i++ {
-		// switch to regex
 		exe := strings.ToLower(x[i])
 		exe = strings.ReplaceAll(exe, " ", "_")
 		exe = strings.ReplaceAll(exe, "'", "")
@@ -253,6 +260,7 @@ func create_shims() {
 		err = os.WriteFile(path, data, 0755)
 		os.Chmod(path, 0755)
 	}
+	return nil
 }
 
 func curl_xml() {
@@ -316,29 +324,52 @@ func get_apps() {
 
 }
 
-func main() {
-	get_apps()
-	os.Exit(0)
-	if len(os.Args) > 1 {
-		if os.Args[1] == "--link" {
-			create_shims()
-			os.Exit(0)
-		} else if os.Args[1] == "--help" || os.Args[1] == "-h" {
-			fmt.Println("go-flatpak")
-			fmt.Println("\nRun go-flatpak with no arguments to install a package using a fzf")
-			fmt.Println("--help|-h\t\tshow this help message")
-			fmt.Println("--link\t\t\tcreate a bin directory and export shorthand executable files")
-			fmt.Println("\nex: org.blender.Blender - creates an executable file called \"blender\"")
-			os.Exit(0)
+func findXml() (string, error) {
+	base := "/var/lib/flatpak/appstream"
+	var fpath string
+
+	filepath.WalkDir(base, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
 		}
+
+		if !d.Type().IsRegular() {
+			return nil
+		}
+
+		f := filepath.Base(path)
+		if f == "appstream.xml" {
+			fpath = path
+		}
+		return nil
+	})
+	if fpath == "" {
+		return "", fmt.Errorf("appstream.xml not found")
+	}
+
+	return fpath, nil
+}
+
+func Flatpak(args []string) error {
+	if opts.Link {
+		err := create_shims()
+		if err != nil {
+			return err
+		}
+		return nil
 	}
 
 	var xml_file *os.File
-	if _, err := os.Stat("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml"); err == nil {
-		xml_file, err = os.Open("/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml")
+	flatpakFile := "/var/lib/flatpak/appstream/flathub/x86_64/active/appstream.xml"
+	if opts.Appstream != "" {
+		flatpakFile = opts.Appstream
+	}
+
+	_, err := os.Stat(flatpakFile)
+	if err == nil {
+		xml_file, err = os.Open(flatpakFile)
 	} else {
-		fmt.Println("Flatpak Database not found, downloading...")
-		appstream_fallback()
+		return fmt.Errorf("Flatpak Database not found")
 	}
 
 	defer xml_file.Close()
@@ -346,7 +377,10 @@ func main() {
 
 	// read our opened xmlFile as a byte array.
 	byteValue, _ := io.ReadAll(xml_file)
-	xml.Unmarshal(byteValue, &component)
+	err = xml.Unmarshal(byteValue, &component)
+	if err != nil {
+		return err
+	}
 
 	idx, err := fzf.FindMulti(
 		component.App,
@@ -373,13 +407,33 @@ func main() {
 	}
 
 	fmt.Println(arrayToString(package_list_from_index))
+
 	c := askForConfirmation("Would you like to install: ")
 	if c {
 		fmt.Println("OKAY :)")
 		install_it(package_list_from_index)
-
 	} else {
 		fmt.Println("OKAY Maybe next time :)")
 		os.Exit(0)
+	}
+
+	return nil
+}
+
+func main() {
+	args, err := flags.Parse(&opts)
+	if flags.WroteHelp(err) {
+		os.Exit(0)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if opts.Verbose {
+		Debug = log.Printf
+	}
+
+	if err := Flatpak(args); err != nil {
+		log.Fatal(err)
 	}
 }
