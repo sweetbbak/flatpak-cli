@@ -22,6 +22,7 @@ var opts struct {
 	Download  bool   `short:"d" long:"download" description:"download App info file from flathub"`
 	Appstream string `short:"a" long:"appstream" description:"path to appstream.xml file [default: uses the one on the system]"`
 	Link      bool   `short:"l" long:"link" description:"export flatpaks into their CLI tool names by creating a shim"`
+	Wrap      uint   `short:"w" long:"wrap" description:"wrap FZF preview text at N length"`
 	Verbose   bool   `short:"v" long:"verbose" description:"print debugging information and verbose output"`
 }
 
@@ -373,7 +374,8 @@ func Flatpak(args []string) error {
 	}
 
 	defer xml_file.Close()
-	var component Comp
+	// var component Comp
+	var component Components
 
 	// read our opened xmlFile as a byte array.
 	byteValue, _ := io.ReadAll(xml_file)
@@ -382,28 +384,83 @@ func Flatpak(args []string) error {
 		return err
 	}
 
+	var wrapLen uint
+	wrapLen = opts.Wrap
+
 	idx, err := fzf.FindMulti(
-		component.App,
+		component.Component,
 		func(i int) string {
-			return component.App[i].Name
+			c := component.Component[i]
+			return c.Name[0].Text
 		},
 		fzf.WithPreviewWindow(func(i, w, h int) string {
 			if i == -1 {
 				return "Hello there :)"
 			}
-			return fmt.Sprintf("Name: %s (%s)\nSummary: %s\n%s\n",
-				component.App[i].Name,
-				component.App[i].ID,
-				component.App[i].Description,
-				component.App[i].Summary)
+			desc := component.Component[i].Description
+			if len(desc) < 1 {
+				return fmt.Sprintf("Name: %s (%s)\n%s\n%s\n",
+					component.Component[i].Name,
+					component.Component[i].ID,
+					component.Component[i].Summary,
+					component.Component[i].Description)
+			}
+
+			var s1, s2, s3 []string
+			var s0 string
+
+			s0 = desc[0].Text
+
+			if len(desc[0].Ul) >= 1 {
+				s1 = desc[0].Ul[0].Li
+			}
+			if len(desc[0].Ol.Li) > 0 {
+				s2 = desc[0].Ol.Li
+			}
+
+			if len(desc[0].P) >= 1 {
+				s3 = desc[0].P[0].Br
+			}
+
+			text0 := strings.Join(s1, "\n")
+			text1 := strings.Join(s2, "\n")
+			text2 := strings.Join(s3, "\n")
+			d := fmt.Sprintf("%s\n%s %s %s", s0, text0, text1, text2)
+			d = WrapString(d, wrapLen)
+
+			return fmt.Sprintf("Name: %s (%s)\n%s\n%s\n",
+				component.Component[i].Name[0].Text,
+				component.Component[i].ID,
+				component.Component[i].Summary[0].Text,
+				d)
 		}))
 	if err == fzf.ErrAbort {
 		os.Exit(0)
 	}
 
+	// backup
+	// idx, err := fzf.FindMulti(
+	// 	component.App,
+	// 	func(i int) string {
+	// 		return component.App[i].Name
+	// 	},
+	// 	fzf.WithPreviewWindow(func(i, w, h int) string {
+	// 		if i == -1 {
+	// 			return "Hello there :)"
+	// 		}
+	// 		return fmt.Sprintf("Name: %s (%s)\nSummary: %s\n%s\n",
+	// 			component.App[i].Name,
+	// 			component.App[i].ID,
+	// 			component.App[i].Description,
+	// 			component.App[i].Summary)
+	// 	}))
+	// if err == fzf.ErrAbort {
+	// 	os.Exit(0)
+	// }
+
 	package_list_from_index := []string{}
 	for i := 0; i < len(idx); i++ {
-		package_list_from_index = append(package_list_from_index, component.App[idx[i]].ID)
+		package_list_from_index = append(package_list_from_index, component.Component[idx[i]].ID)
 	}
 
 	fmt.Println(arrayToString(package_list_from_index))
@@ -418,6 +475,10 @@ func Flatpak(args []string) error {
 	}
 
 	return nil
+}
+
+func init() {
+	opts.Wrap = 55
 }
 
 func main() {
