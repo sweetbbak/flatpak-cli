@@ -17,7 +17,7 @@ shims manually or adding each one as an alias.
 Build and run:
 ```sh
   go build -o go-flatpak
-  ./go-flatpap
+  ./go-flatpak
 ```
 
 Use the Fzf-like interface to browse through the flatpak database and hit ENTER to install a package
